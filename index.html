@@ -801,62 +801,9 @@
 
 <body>
 
-    <!-- Full Screen BST Overlay -->
-    <div id="bstFullScreen" class="bst-full-screen" onclick="copyBstTime()">
-        <button class="close-fs" onclick="closeBstFs(event)">✕ Close</button>
-        <div class="fs-label">Current Bangladesh Time</div>
-        <div id="fsClock" class="fs-clock">--:--:-- --</div>
-        <div class="fs-label" style="color:#6b7280; font-size:12px;">Recommended Offset (-54m)</div>
-        <div id="fsOffset" class="fs-offset">--:-- --</div>
-        <div style="margin-top:30px; font-size:14px; color:#9ca3af;">Click anywhere to COPY</div>
-    </div>
-
-    <!-- BST Persistent Helper Section -->
-    <div class="bst-widget-container">
-        <div class="bst-card">
-            <div class="bst-top-row" onclick="openBstFs()">
-                <div>
-                    <div class="bst-label">Bangladesh Time</div>
-                    <div id="bstClockMini" class="bst-time-main">--:--:-- --</div>
-                </div>
-                <div class="bst-offset-display">
-                    <div class="bst-label">Recommended Offset (-54m)</div>
-                    <div id="bstOffsetMini" class="bst-offset-time" onclick="copyBstTimeFromMini(event)">--:-- --</div>
-                </div>
-                <div class="bst-fs-btn">⛶ FULL SCREEN</div>
-            </div>
-            <div class="bst-manual-row">
-                <span class="bst-manual-label">OR MANUALLY:</span>
-                <input type="text" id="manualTimeInput" class="bst-input" placeholder="e.g. 11:20 PM"
-                    oninput="calcManualOffset()">
-                <button class="bst-copy-btn" onclick="copyManualTime()">Copy Result</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Login Screen -->
-    <div id="loginScreen" class="login-screen">
-        <div class="login-box">
-            <div class="login-logo">💾</div>
-            <h2 id="authTitle" class="login-title">Welcome Back</h2>
-            <p id="authSubtitle" class="login-subtitle">Sign in to sync your messages</p>
-
-            <div class="auth-form">
-                <input type="email" id="email" placeholder="Email Address">
-                <input type="password" id="password" placeholder="Password">
-                <button id="authBtn" class="auth-btn" onclick="handleAuth()">Login</button>
-            </div>
-
-            <div class="auth-toggle">
-                <span id="toggleText">New here? </span>
-                <span id="toggleLink" onclick="toggleAuthMode()">Create account</span>
-            </div>
-        </div>
-    </div>
-
     <!-- Main App -->
     <div id="mainApp" class="container hidden">
-        <div class="header">
+        <div class="header" style="margin-top: 20px;">
             <div class="header-left">
                 <h1>💾 Message Saver Pro</h1>
                 <div class="sync-status">
@@ -945,22 +892,29 @@
         let sortable = null;
         let isLayoutMode = false;
 
-        // --- BST HELPER LOGIC ---
+        // --- TIME CARD LOGIC ---
         function updateClock() {
             const now = new Date();
-            const options = { timeZone: 'Asia/Dhaka', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true };
-            const bstStr = new Intl.DateTimeFormat('en-US', options).format(now);
-            document.getElementById('bstClockMini').textContent = bstStr;
-            document.getElementById('fsClock').textContent = bstStr;
+            // Calculate BD time + 6 minutes
+            // BD is UTC+6. If system is already BD time (which user implies), we just add 6 mins.
+            // If system is NOT BD, we should ideally convert to BD then add 6 mins.
+            // Assuming user's system is correct or we use the specific timezone logic:
 
-            const offsetDate = new Date(now.getTime());
-            offsetDate.setMinutes(offsetDate.getMinutes() - 54);
-            const offsetStr = formatTime(offsetDate);
-            document.getElementById('bstOffsetMini').textContent = offsetStr;
-            document.getElementById('fsOffset').textContent = offsetStr;
+            // Explicitly getting BD time first to be safe
+            const bstStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+            const bstDate = new Date(bstStr);
+
+            // Add 6 minutes
+            bstDate.setMinutes(bstDate.getMinutes() + 6);
+
+            const offsetStr = formatTime(bstDate);
+
+            const timeEl = document.getElementById('card-live-time');
+            if (timeEl) {
+                timeEl.textContent = offsetStr;
+            }
         }
         setInterval(updateClock, 1000);
-        updateClock();
 
         function formatTime(d) {
             let h = d.getHours();
@@ -970,39 +924,16 @@
             return `${h}:${m < 10 ? '0' + m : m} ${ampm}`;
         }
 
-        window.openBstFs = () => document.getElementById('bstFullScreen').classList.add('active');
-        window.closeBstFs = (e) => { e.stopPropagation(); document.getElementById('bstFullScreen').classList.remove('active'); };
-        window.copyBstTime = () => copyText(document.getElementById('fsOffset').textContent);
-        window.copyBstTimeFromMini = (e) => { e.stopPropagation(); copyText(document.getElementById('bstOffsetMini').textContent); };
-
-        window.calcManualOffset = () => {
-            const val = document.getElementById('manualTimeInput').value;
-            const regex = /(\d{1,2}):(\d{2})\s*(AM|PM)/i;
-            const match = val.match(regex);
-            if (match) {
-                let [_, h, m, ap] = match;
-                h = parseInt(h); m = parseInt(m); ap = ap.toUpperCase();
-                if (ap === 'PM' && h !== 12) h += 12;
-                if (ap === 'AM' && h === 12) h = 0;
-                const d = new Date();
-                d.setHours(h, m, 0);
-                d.setMinutes(d.getMinutes() - 54);
-                document.getElementById('manualTimeInput').style.borderColor = '#2563eb';
-                document.getElementById('manualTimeInput').setAttribute('data-result', formatTime(d));
-            } else {
-                document.getElementById('manualTimeInput').style.borderColor = '#d1d5db';
-            }
-        };
-
-        window.copyManualTime = () => {
-            const res = document.getElementById('manualTimeInput').getAttribute('data-result');
-            if (res) copyText(res);
+        window.copyTime = () => {
+            const timeEl = document.getElementById('card-live-time');
+            if (timeEl) copyText(timeEl.textContent);
         };
 
         async function copyText(text) {
             try {
                 await navigator.clipboard.writeText(text);
                 const ov = document.getElementById('copiedOverlay');
+                ov.textContent = text; // Show the copied time
                 ov.classList.add('show');
                 setTimeout(() => ov.classList.remove('show'), 800);
             } catch (e) { }
@@ -1217,13 +1148,15 @@
         async function saveNewOrder() {
             if (!currentUser) return;
             const grid = document.getElementById('messagesList');
-            const cards = grid.querySelectorAll('.message-card');
+            const cards = grid.querySelectorAll('.message-card:not(.time-card)'); // Exclude time card
             const batch = writeBatch(db);
 
             cards.forEach((card, index) => {
                 const id = card.getAttribute('data-id');
-                const ref = doc(db, 'users', currentUser.uid, 'messages', id);
-                batch.update(ref, { order: index });
+                if (id) {
+                    const ref = doc(db, 'users', currentUser.uid, 'messages', id);
+                    batch.update(ref, { order: index });
+                }
             });
 
             try {
@@ -1309,12 +1242,29 @@
 
             messageCount.textContent = messages.length;
 
+            // TIME CARD HTML
+            const timeCardHtml = `
+                <div class="message-card time-card" onclick="copyTime()" style="border-color: #2563eb; background: #eff6ff;">
+                    <div class="message-header">
+                        <div class="message-title" style="color: #2563eb;">TIME RIGHT NOW</div>
+                        <span class="category-badge" style="background: #2563eb; color: white;">LIVE</span>
+                    </div>
+                    <div class="message-content" style="display: flex; align-items: center; justify-content: center;">
+                        <div id="card-live-time" style="font-size: 32px; font-weight: 800; color: #2563eb; line-height: 1;">--:-- --</div>
+                    </div>
+                    <div class="message-footer">
+                        <div class="copy-hint" style="color: #2563eb;">👆 Click to copy time</div>
+                    </div>
+                </div>
+            `;
+
             if (messages.length === 0) {
-                container.innerHTML = '<div class="empty-state">No messages yet</div>';
+                container.innerHTML = timeCardHtml + '<div class="empty-state" style="width: 100%;">No messages yet</div>';
+                updateClock(); // Initialize clock immediately
                 return;
             }
 
-            container.innerHTML = messages.map((msg) => `
+            const messagesHtml = messages.map((msg) => `
                 <div class="message-card" data-id="${msg.id}" onclick="copyMessage('${msg.id}', event)">
                     <div class="message-header">
                         <div class="message-title">${escapeHtml(msg.title)}</div>
@@ -1327,6 +1277,9 @@
                     </div>
                 </div>
             `).join('');
+
+            container.innerHTML = timeCardHtml + messagesHtml;
+            updateClock(); // Initialize clock immediately
         }
 
         // Filter Messages
